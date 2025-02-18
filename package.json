@@ -1,0 +1,25 @@
+{
+  "name": "imdb-etl",
+  "version": "1.0.0",
+  "main": "main.ts",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types --experimental-transform-types --env-file=.env src/main.ts",
+    "start:dev": "node --experimental-strip-types --experimental-transform-types --env-file=.env.dev --watch src/main.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "csv-parser": "^3.2.0",
+    "fast-csv": "^5.0.2",
+    "pg": "^8.13.3",
+    "pg-copy-streams": "^6.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/pg": "^8.11.11"
+  }
+}
