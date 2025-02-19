@@ -1,9 +1,12 @@
 {
+  "extends": "@tsconfig/node-lts/tsconfig.json",
   "compilerOptions": {
-     "target": "esnext",
-     "module": "nodenext",
-     "allowImportingTsExtensions": true,
-     "rewriteRelativeImportExtensions": true,
-     "verbatimModuleSyntax": true
-  }
-} 
+    "esModuleInterop": true,
+    "moduleDetection": "force",
+    "outDir": "dist",
+    "strict": false,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

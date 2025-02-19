@@ -1,23 +1,15 @@
 import fs from 'node:fs';
-import fcsv from 'fast-csv';
+import { parse as parseCSV, format as formatCSV } from 'fast-csv';
 import pg from 'pg';
 import zlib from 'node:zlib';
 import path from 'node:path';
 import { URL } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import * as pgCopy from 'pg-copy-streams';
-import { DATASETS, type Dataset, type DatasetTransform } from './datasets.ts';
+import { DATASETS, type Dataset, type DatasetTransform } from './datasets';
 import axios from 'axios';
 
-const PG_CONFIG = {
-  user: process.env.PG_USER,
-  host: process.env.PG_HOST,
-  database: process.env.PG_DATABASE,
-  password: process.env.PG_PASSWORD,
-  port: Number(process.env.PG_PORT),
-};
-
-const pool = new pg.Pool(PG_CONFIG);
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 const BASE_URL = 'https://datasets.imdbws.com';
 
@@ -26,10 +18,10 @@ function log(message: string) {
 }
 
 async function downloadFile(fileUrl: URL, filePath: string) {
-  log(`📁 Starting download ${fileUrl}`);
+  log(`📡 Starting download ${fileUrl}`);
   const { data } = await axios.get(fileUrl.toString(), { responseType: 'stream' });
   await pipeline(data, fs.createWriteStream(filePath));
-  log(`📁 Download completed ${fileUrl}`);
+  log(`📡 Download completed ${fileUrl}`);
 }
 
 async function extractFile(zipPath: string, tsvPath: string, transform?: DatasetTransform) {
@@ -37,15 +29,15 @@ async function extractFile(zipPath: string, tsvPath: string, transform?: Dataset
   await pipeline(
     fs.createReadStream(zipPath),
     zlib.createUnzip(),
-    fcsv.parse({ delimiter: '\t', quote: null, headers: true, ignoreEmpty: true }),
-    fcsv.format({ delimiter: '\t' }).transform((row) => (transform ? transform(row) : row)),
+    parseCSV({ delimiter: '\t', quote: null, headers: true, ignoreEmpty: true }),
+    formatCSV({ delimiter: '\t' }).transform((row) => (transform ? transform(row) : row)),
     fs.createWriteStream(tsvPath, { flags: 'w' }),
   );
   log(`📦 Extraction completed ${zipPath}`);
 }
 
 async function importFileToDatabase(dataset: Dataset, tsvPath: string) {
-  log(`🎲 Starting data import ${dataset.name}`);
+  log(`💾 Starting data import ${dataset.name}`);
   const db = await pool.connect();
   try {
     await db.query(`CREATE TABLE IF NOT EXISTS ${dataset.name}(${dataset.columns.join(',')});`);
@@ -59,18 +51,18 @@ async function importFileToDatabase(dataset: Dataset, tsvPath: string) {
   } finally {
     db.release();
   }
-  log(`🎲 Data import completed ${dataset.name}`);
+  log(`💾 Data import completed ${dataset.name}`);
 }
 
-async function runETL() {
-  const dataDir = path.join('/tmp', 'imdb-datasets');
+(async () => {
+  try {
+    const dataDir = path.join('/tmp', 'imdb-datasets');
 
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
 
-  await Promise.all(
-    DATASETS.map(async (dataset) => {
+    for (const dataset of DATASETS) {
       const fileUrl = new URL(BASE_URL);
       fileUrl.pathname = dataset.file;
       const zipFilePath = path.join(dataDir, dataset.file);
@@ -78,12 +70,16 @@ async function runETL() {
       await downloadFile(fileUrl, zipFilePath);
       await extractFile(zipFilePath, csvFilePath, dataset.transform);
       await importFileToDatabase(dataset, csvFilePath);
-    }),
-  );
+      fs.rmSync(zipFilePath);
+      fs.rmSync(csvFilePath);
+    }
 
-  fs.rmdirSync(dataDir, { recursive: true });
-
-  log('🎉 ETL process completed successfully!');
-}
-
-runETL().catch((error) => log(`❌ ETL process failed: ${error}`));
+    log('🎉 ETL process completed successfully!');
+  } catch (error) {
+    log(`❌ ETL process failed: ${error}`);
+    throw error;
+  } finally {
+    await pool.end();
+    log('💾 Database connection closed');
+  }
+})();

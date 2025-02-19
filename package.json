@@ -1,11 +1,11 @@
 {
   "name": "imdb-etl",
   "version": "1.0.0",
-  "main": "main.ts",
-  "type": "module",
+  "main": "dist/main.ts",
   "scripts": {
-    "start": "node --experimental-strip-types --experimental-transform-types --env-file=.env src/main.ts",
-    "start:dev": "node --experimental-strip-types --experimental-transform-types --env-file=.env.dev --watch src/main.ts",
+    "start": "node dist/main.js",
+    "start:dev": "nodemon --exec ts-node src/main.ts",
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -13,13 +13,16 @@
   "description": "",
   "dependencies": {
     "axios": "^1.7.9",
-    "csv-parser": "^3.2.0",
     "fast-csv": "^5.0.2",
     "pg": "^8.13.3",
     "pg-copy-streams": "^6.0.6"
   },
   "devDependencies": {
+    "@tsconfig/node-lts": "^22.0.1",
     "@types/node": "^22.13.4",
-    "@types/pg": "^8.11.11"
+    "@types/pg": "^8.11.11",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
   }
 }
