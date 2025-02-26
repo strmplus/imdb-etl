@@ -43,7 +43,7 @@ export const DATASETS: Dataset[] = [
   {
     name: 'title_ratings',
     file: 'title.ratings.tsv.gz',
-    columns: ['tconst TEXT PRIMARY KEY', 'averageRating FLOAT', 'numVotes TEXT'],
+    columns: ['tconst TEXT PRIMARY KEY', 'averageRating FLOAT', 'numVotes INT'],
     indexes: ['tconst', 'averageRating'],
   },
   {
