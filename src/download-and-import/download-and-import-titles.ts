@@ -8,13 +8,18 @@ import { pipeline } from 'node:stream/promises';
 import * as pgCopy from 'pg-copy-streams';
 import { DATASETS, type Dataset, type DatasetTransform } from './datasets';
 import axios from 'axios';
-import { log } from '../utils/log';
+import pino from 'pino';
 
 const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL });
 
 const BASE_URL = 'https://datasets.imdbws.com';
 
 export class DownloadAndImportTitles {
+  private readonly logger = pino({
+    name: 'imdb-etl:download-and-import-titles',
+    level: process.env.LOG_LEVEL || 'info',
+  });
+
   async execute() {
     try {
       const dataDir = path.join('/tmp', 'imdb-datasets');
@@ -35,23 +40,23 @@ export class DownloadAndImportTitles {
         fs.rmSync(csvFilePath);
       }
 
-      log('🎉 ETL process completed successfully!');
+      this.logger.info('🎉 ETL process completed successfully!');
     } catch (error) {
-      log(`❌ ETL process failed: ${error}`);
+      this.logger.error(`❌ ETL process failed: ${error}`, error);
       throw error;
     } finally {
       await pool.end();
-      log('💾 Database connection closed');
+      this.logger.info('💾 Database connection closed');
     }
   }
 
   private async downloadFile(fileUrl: URL, filePath: string) {
-    log(`📡 Starting download ${fileUrl}`);
+    this.logger.info(`📡 Starting download ${fileUrl}`);
     const { data } = await axios.get(fileUrl.toString(), {
       responseType: 'stream',
     });
     await pipeline(data, fs.createWriteStream(filePath));
-    log(`📡 Download completed ${fileUrl}`);
+    this.logger.info(`📡 Download completed ${fileUrl}`);
   }
 
   private async extractFile(
@@ -59,7 +64,7 @@ export class DownloadAndImportTitles {
     tsvPath: string,
     transform?: DatasetTransform,
   ) {
-    log(`📦 Starting extraction ${zipPath}`);
+    this.logger.info(`📦 Starting extraction ${zipPath}`);
     await pipeline(
       fs.createReadStream(zipPath),
       zlib.createUnzip(),
@@ -74,11 +79,11 @@ export class DownloadAndImportTitles {
       ),
       fs.createWriteStream(tsvPath, { flags: 'w' }),
     );
-    log(`📦 Extraction completed ${zipPath}`);
+    this.logger.info(`📦 Extraction completed ${zipPath}`);
   }
 
   private async importFileToDatabase(dataset: Dataset, tsvPath: string) {
-    log(`💾 Starting data import ${dataset.name}`);
+    this.logger.info(`💾 Starting data import ${dataset.name}`);
     const db = await pool.connect();
     try {
       await db.query(
@@ -102,6 +107,6 @@ export class DownloadAndImportTitles {
     } finally {
       db.release();
     }
-    log(`💾 Data import completed ${dataset.name}`);
+    this.logger.info(`💾 Data import completed ${dataset.name}`);
   }
 }

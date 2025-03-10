@@ -1,14 +1,19 @@
-import { log } from '../utils/log';
+import pino from 'pino';
 import { MongoHelper } from '../utils/mongo-helper';
 import { PgHelper } from '../utils/pg-helper';
 
 export class NormalizeTitles {
   private readonly mongoDB: MongoHelper;
   private readonly pgDB: PgHelper;
+  private readonly logger: pino.Logger;
 
   constructor() {
     this.mongoDB = new MongoHelper();
     this.pgDB = new PgHelper();
+    this.logger = pino({
+      name: 'imdb-etl:normalize-titles',
+      level: process.env.LOG_LEVEL || 'info',
+    });
   }
 
   async execute(title: any) {
@@ -30,8 +35,12 @@ export class NormalizeTitles {
       const seasons = await this.getSeasons(normalizedTitle.imdbId);
       Object.assign(normalizedTitle, { seasons });
     }
-    await collection.updateOne({ imdbId: normalizedTitle.imdbId }, { $set: normalizedTitle }, { upsert: true });
-    log(`✅ Title ${normalizedTitle.imdbId} normalized`);
+    await collection.updateOne(
+      { imdbId: normalizedTitle.imdbId },
+      { $set: normalizedTitle },
+      { upsert: true },
+    );
+    this.logger.info(`✅ Title ${normalizedTitle.imdbId} normalized`);
   }
 
   private async getRatings(imdbId: string) {

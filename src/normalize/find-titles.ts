@@ -1,20 +1,27 @@
-import { log } from '../utils/log';
 import { Queue } from 'bullmq';
 import { PgHelper } from '../utils/pg-helper';
+import pino from 'pino';
 
 const NORMALIZE_TITLES_QUEUE_NAME = 'normalize-titles';
 
 export class FindTitles {
   private readonly pgDB: PgHelper;
   private readonly queue: Queue;
+  private readonly logger: pino.Logger;
 
   constructor() {
     this.pgDB = new PgHelper();
-    this.queue = new Queue(NORMALIZE_TITLES_QUEUE_NAME, { connection: { url: process.env.REDIS_URL } });
+    this.queue = new Queue(NORMALIZE_TITLES_QUEUE_NAME, {
+      connection: { url: process.env.REDIS_URL },
+    });
+    this.logger = pino({
+      name: 'imdb-etl:find-titles',
+      level: process.env.LOG_LEVEL || 'info',
+    });
   }
 
   async execute() {
-    log('🔍 Searching titles to normalize');
+    this.logger.info('🔍 Searching titles to normalize');
     let offset = 0;
     const limit = 1000;
     let hasMore = false;
@@ -22,8 +29,12 @@ export class FindTitles {
       const rows = await this.getTitles(offset, limit);
       hasMore = rows.length > 0;
       if (hasMore) {
-        await this.queue.addBulk(rows.map((row) => ({ name: NORMALIZE_TITLES_QUEUE_NAME, data: row })));
-        log(`🔍 ${offset + rows.length} titles found to normalize`);
+        await this.queue.addBulk(
+          rows.map((row) => ({ name: NORMALIZE_TITLES_QUEUE_NAME, data: row })),
+        );
+        this.logger.info(
+          `🔍 ${offset + rows.length} titles found to normalize`,
+        );
         offset += limit;
       }
     } while (hasMore);
