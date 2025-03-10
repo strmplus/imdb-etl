@@ -8,14 +8,11 @@ import { pipeline } from 'node:stream/promises';
 import * as pgCopy from 'pg-copy-streams';
 import { DATASETS, type Dataset, type DatasetTransform } from './datasets';
 import axios from 'axios';
+import { log } from '../utils/log';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL });
 
 const BASE_URL = 'https://datasets.imdbws.com';
-
-function log(message: string) {
-  console.log(`[${new Date().toISOString()}] ${message}`);
-}
 
 export class DownloadAndImportTitles {
   async execute() {
@@ -50,18 +47,31 @@ export class DownloadAndImportTitles {
 
   private async downloadFile(fileUrl: URL, filePath: string) {
     log(`📡 Starting download ${fileUrl}`);
-    const { data } = await axios.get(fileUrl.toString(), { responseType: 'stream' });
+    const { data } = await axios.get(fileUrl.toString(), {
+      responseType: 'stream',
+    });
     await pipeline(data, fs.createWriteStream(filePath));
     log(`📡 Download completed ${fileUrl}`);
   }
 
-  private async extractFile(zipPath: string, tsvPath: string, transform?: DatasetTransform) {
+  private async extractFile(
+    zipPath: string,
+    tsvPath: string,
+    transform?: DatasetTransform,
+  ) {
     log(`📦 Starting extraction ${zipPath}`);
     await pipeline(
       fs.createReadStream(zipPath),
       zlib.createUnzip(),
-      parseCSV({ delimiter: '\t', quote: null, headers: true, ignoreEmpty: true }),
-      formatCSV({ delimiter: '\t' }).transform((row) => (transform ? transform(row) : row)),
+      parseCSV({
+        delimiter: '\t',
+        quote: null,
+        headers: true,
+        ignoreEmpty: true,
+      }),
+      formatCSV({ delimiter: '\t' }).transform((row) =>
+        transform ? transform(row) : row,
+      ),
       fs.createWriteStream(tsvPath, { flags: 'w' }),
     );
     log(`📦 Extraction completed ${zipPath}`);
@@ -71,13 +81,23 @@ export class DownloadAndImportTitles {
     log(`💾 Starting data import ${dataset.name}`);
     const db = await pool.connect();
     try {
-      await db.query(`CREATE TABLE IF NOT EXISTS ${dataset.name}(${dataset.columns.join(',')});`);
+      await db.query(
+        `CREATE TABLE IF NOT EXISTS ${dataset.name}(${dataset.columns.join(
+          ',',
+        )});`,
+      );
       await db.query(`TRUNCATE ${dataset.name};`);
       for (const index of dataset.indexes ?? []) {
-        await db.query(`CREATE INDEX IF NOT EXISTS idx_${dataset.name}_${index} ON ${dataset.name}(${index});`);
+        await db.query(
+          `CREATE INDEX IF NOT EXISTS idx_${dataset.name}_${index} ON ${dataset.name}(${index});`,
+        );
       }
-      const ingestStream = db.query(pgCopy.from(`COPY ${dataset.name} FROM STDIN`));
-      const sourceStream = fs.createReadStream(tsvPath, { highWaterMark: 64 * 1024 }); // 64KB chunks for better performance
+      const ingestStream = db.query(
+        pgCopy.from(`COPY ${dataset.name} FROM STDIN`),
+      );
+      const sourceStream = fs.createReadStream(tsvPath, {
+        highWaterMark: 64 * 1024,
+      }); // 64KB chunks for better performance
       await pipeline(sourceStream, ingestStream);
     } finally {
       db.release();
@@ -85,8 +105,3 @@ export class DownloadAndImportTitles {
     log(`💾 Data import completed ${dataset.name}`);
   }
 }
-
-(async () => {
-  const downloadAndImportTitles = new DownloadAndImportTitles();
-  await downloadAndImportTitles.execute();
-})();
