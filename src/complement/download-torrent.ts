@@ -4,15 +4,21 @@ import fs from 'node:fs';
 import os from 'node:os';
 import throttle from 'lodash.throttle';
 import WebTorrent from 'webtorrent';
-import { LOG_THROTTLE_MS, TORRENT_CONNECT_TIMEOUT_MS, TORRENT_TRACKERS, VIDEO_FILE_EXT } from '../constants';
+import {
+  LOG_THROTTLE_MS,
+  TORRENT_CONNECT_TIMEOUT_MS,
+  TORRENT_TRACKERS,
+  VIDEO_FILE_EXT,
+} from '../constants';
 import { promisify } from 'node:util';
 import { EventEmitter } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
-import slugify from 'slugify';
 
 export class DownloadTorrent {
   private readonly logger: pino.Logger;
-  private readonly downloadPath = path.join('/mnt/c/Users/Micael/Downloads', 'torrents');
+  private readonly downloadPath = path.join(
+    '/mnt/c/Users/Micael/Downloads',
+    'torrents',
+  );
   private client: WebTorrent.Instance;
 
   constructor() {
@@ -25,14 +31,21 @@ export class DownloadTorrent {
     }
   }
 
-  private async waitForEvent(emitter: EventEmitter, event: string, timeoutMs?: number) {
+  private async waitForEvent(
+    emitter: EventEmitter,
+    event: string,
+    timeoutMs?: number,
+  ) {
     if (!timeoutMs) {
       return promisify((cb) => emitter.once(event, cb))();
     }
     return Promise.race([
       promisify((cb) => emitter.once(event, cb))(),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`timeout: event '${event}' did not occur`)), timeoutMs),
+        setTimeout(
+          () => reject(new Error(`timeout: event '${event}' did not occur`)),
+          timeoutMs,
+        ),
       ),
     ]);
   }
@@ -42,7 +55,9 @@ export class DownloadTorrent {
     if (!this.client) {
       this.client = new WebTorrent.default({ maxConns: 200 });
     }
-    const selectedTorrent = title.torrents.find((torrent) => torrent.quality === '1080p');
+    const selectedTorrent = title.torrents.find(
+      (torrent) => torrent.quality === '1080p',
+    );
 
     const logMetadata = {
       imdbId: title.imdbId,
@@ -60,7 +75,10 @@ export class DownloadTorrent {
     });
     torrent.on(
       'download',
-      throttle(() => this.logger.info(logMetadata, this.progressMessage(torrent)), LOG_THROTTLE_MS),
+      throttle(
+        () => this.logger.info(logMetadata, this.progressMessage(torrent)),
+        LOG_THROTTLE_MS,
+      ),
     );
 
     try {
@@ -68,7 +86,10 @@ export class DownloadTorrent {
       await this.waitForEvent(torrent, 'done');
       this.logger.info(logMetadata, `downloadeded for ${title.imdbId}`);
     } catch (error) {
-      this.logger.error(logMetadata, `error downloading torrent: ${error.message}`);
+      this.logger.error(
+        logMetadata,
+        `error downloading torrent: ${error.message}`,
+      );
     } finally {
       torrent.destroy();
     }
@@ -79,7 +100,10 @@ export class DownloadTorrent {
     const neg = num < 0;
     if (neg) num = -num;
     if (num < 1) return `${neg ? '-' : ''}${num} B`;
-    const exponent = Math.min(Math.floor(Math.log(num) / Math.log(1000)), units.length - 1);
+    const exponent = Math.min(
+      Math.floor(Math.log(num) / Math.log(1000)),
+      units.length - 1,
+    );
     const unit = units[exponent];
     num = Number((num / Math.pow(1000, exponent)).toFixed(2));
     return `${neg ? '-' : ''}${num} ${unit}`;
@@ -90,6 +114,8 @@ export class DownloadTorrent {
     const downloadSpeed = this.prettyBytes(torrent.downloadSpeed);
     return `downloaded: ${this.prettyBytes(
       torrent.downloaded,
-    )}, speed: ${downloadSpeed}, progress: ${progress}%, peers: ${torrent.numPeers}`;
+    )}, speed: ${downloadSpeed}, progress: ${progress}%, peers: ${
+      torrent.numPeers
+    }`;
   }
 }
