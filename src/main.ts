@@ -41,23 +41,49 @@ const downloadTorrent = new DownloadTorrent();
     pattern: '0 0 * * 0',
   });
 
-  new Worker(DOWNLOAD_AND_IMPORT_TITLES_QUEUE_NAME, () => downloadAndImportTitles.execute(), {
-    connection: REDIS_CONNECTION,
-  }).on('failed', (_, error) => logger.error(error, `❌ Download and import titles failed: ${error}`));
+  new Worker(
+    DOWNLOAD_AND_IMPORT_TITLES_QUEUE_NAME,
+    () => downloadAndImportTitles.execute(),
+    {
+      connection: REDIS_CONNECTION,
+    },
+  ).on('failed', (_, error) =>
+    logger.error(error, `❌ Download and import titles failed: ${error}`),
+  );
 
   new Worker(FIND_TITLES_QUEUE_NAME, () => findTitles.execute(), {
     connection: REDIS_CONNECTION,
-  }).on('failed', (_, error) => logger.error(error, `❌ Finding titles failed: ${error}`));
+  }).on('failed', (_, error) =>
+    logger.error(error, `❌ Finding titles failed: ${error}`),
+  );
 
-  new Worker(NORMALIZE_TITLES_QUEUE_NAME, (job) => normalizeTitles.execute(job.data), {
-    connection: REDIS_CONNECTION,
-    concurrency: NORMALIZE_TITLES_QUEUE_CONCURRENCY,
-  }).on('failed', (job, error) => logger.error(error, `❌ Title ${job.data.tconst} normalization failed: ${error}`));
+  new Worker(
+    NORMALIZE_TITLES_QUEUE_NAME,
+    (job) => normalizeTitles.execute(job.data),
+    {
+      connection: REDIS_CONNECTION,
+      concurrency: NORMALIZE_TITLES_QUEUE_CONCURRENCY,
+    },
+  ).on('failed', (job, error) =>
+    logger.error(
+      error,
+      `❌ Title ${job.data.tconst} normalization failed: ${error}`,
+    ),
+  );
 
-  new Worker(COMPLEMENT_TITLE_QUEUE_NAME, (job) => complementTitle.execute(job.data), {
-    connection: REDIS_CONNECTION,
-    concurrency: COMPLEMENT_TITLES_QUEUE_CONCURRENCY,
-  }).on('failed', (job, error) => logger.error(error, `❌ Title ${job.data.imdbId} complement failed: ${error}`));
+  new Worker(
+    COMPLEMENT_TITLE_QUEUE_NAME,
+    (job) => complementTitle.execute(job.data),
+    {
+      connection: REDIS_CONNECTION,
+      concurrency: COMPLEMENT_TITLES_QUEUE_CONCURRENCY,
+    },
+  ).on('failed', (job, error) =>
+    logger.error(
+      error,
+      `❌ Title ${job.data.imdbId} complement failed: ${error}`,
+    ),
+  );
 
   // new Worker(DOWNLOAD_TORRENT_QUEUE_NAME, (job) => downloadTorrent.execute(job.data), {
   //   connection: REDIS_CONNECTION,

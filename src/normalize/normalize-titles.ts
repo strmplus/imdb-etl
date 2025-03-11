@@ -1,7 +1,6 @@
 import pino from 'pino';
 import { MongoHelper } from '../utils/mongo-helper';
 import { PgHelper } from '../utils/pg-helper';
-import { sleep } from '../utils/sleep';
 import { Queue } from 'bullmq';
 import { COMPLEMENT_TITLE_QUEUE_NAME, REDIS_CONNECTION } from '../constants';
 
@@ -42,9 +41,16 @@ export class NormalizeTitles {
       const seasons = await this.getSeasons(normalizedTitle.imdbId);
       Object.assign(normalizedTitle, { seasons });
     }
-    await collection.updateOne({ imdbId: normalizedTitle.imdbId }, { $set: normalizedTitle }, { upsert: true });
+    await collection.updateOne(
+      { imdbId: normalizedTitle.imdbId },
+      { $set: normalizedTitle },
+      { upsert: true },
+    );
     await this.queue.add(COMPLEMENT_TITLE_QUEUE_NAME, normalizedTitle);
-    this.logger.info({ imdbId: normalizedTitle.imdbId }, `title ${normalizedTitle.imdbId} normalized`);
+    this.logger.info(
+      { imdbId: normalizedTitle.imdbId },
+      `title ${normalizedTitle.imdbId} normalized`,
+    );
   }
 
   private async getRatings(imdbId: string) {

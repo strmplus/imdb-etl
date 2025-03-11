@@ -25,7 +25,6 @@
     "@tsconfig/node-lts": "^22.0.1",
     "@types/node": "^22.13.4",
     "@types/pg": "^8.11.11",
-    "@types/webtorrent": "^0.110.0",
     "dotenv": "^16.4.7",
     "nodemon": "^3.1.9",
     "pino-pretty": "^13.0.0",
