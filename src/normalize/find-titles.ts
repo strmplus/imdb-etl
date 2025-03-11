@@ -1,8 +1,7 @@
 import { Queue } from 'bullmq';
 import { PgHelper } from '../utils/pg-helper';
 import pino from 'pino';
-
-const NORMALIZE_TITLES_QUEUE_NAME = 'normalize-titles';
+import { NORMALIZE_TITLES_QUEUE_NAME, REDIS_CONNECTION } from '../constants';
 
 export class FindTitles {
   private readonly pgDB: PgHelper;
@@ -12,7 +11,7 @@ export class FindTitles {
   constructor() {
     this.pgDB = new PgHelper();
     this.queue = new Queue(NORMALIZE_TITLES_QUEUE_NAME, {
-      connection: { url: process.env.REDIS_URL },
+      connection: REDIS_CONNECTION,
     });
     this.logger = pino({
       name: 'imdb-etl:find-titles',
@@ -21,10 +20,10 @@ export class FindTitles {
   }
 
   async execute() {
-    this.logger.info('🔍 Searching titles to normalize');
     let offset = 0;
     const limit = 1000;
     let hasMore = false;
+    let count = 0;
     do {
       const rows = await this.getTitles(offset, limit);
       hasMore = rows.length > 0;
@@ -32,12 +31,14 @@ export class FindTitles {
         await this.queue.addBulk(
           rows.map((row) => ({ name: NORMALIZE_TITLES_QUEUE_NAME, data: row })),
         );
-        this.logger.info(
+        this.logger.debug(
           `🔍 ${offset + rows.length} titles found to normalize`,
         );
         offset += limit;
+        count += rows.length;
       }
     } while (hasMore);
+    this.logger.info(`🔍 ${count} titles found to normalize`);
   }
 
   async getTitles(offset: number, limit: number) {

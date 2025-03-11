@@ -1,11 +1,14 @@
 import pino from 'pino';
 import { MongoHelper } from '../utils/mongo-helper';
 import { PgHelper } from '../utils/pg-helper';
+import { Queue } from 'bullmq';
+import { COMPLEMENT_TITLE_QUEUE_NAME, REDIS_CONNECTION } from '../constants';
 
 export class NormalizeTitles {
   private readonly mongoDB: MongoHelper;
   private readonly pgDB: PgHelper;
   private readonly logger: pino.Logger;
+  private readonly queue: Queue;
 
   constructor() {
     this.mongoDB = new MongoHelper();
@@ -13,6 +16,9 @@ export class NormalizeTitles {
     this.logger = pino({
       name: 'imdb-etl:normalize-titles',
       level: process.env.LOG_LEVEL || 'info',
+    });
+    this.queue = new Queue(COMPLEMENT_TITLE_QUEUE_NAME, {
+      connection: REDIS_CONNECTION,
     });
   }
 
@@ -40,7 +46,11 @@ export class NormalizeTitles {
       { $set: normalizedTitle },
       { upsert: true },
     );
-    this.logger.info(`✅ Title ${normalizedTitle.imdbId} normalized`);
+    await this.queue.add(COMPLEMENT_TITLE_QUEUE_NAME, normalizedTitle);
+    this.logger.info(
+      { imdbId: normalizedTitle.imdbId },
+      `title ${normalizedTitle.imdbId} normalized`,
+    );
   }
 
   private async getRatings(imdbId: string) {
