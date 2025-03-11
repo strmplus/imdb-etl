@@ -1,11 +1,14 @@
 import pino from 'pino';
 import { MongoHelper } from '../utils/mongo-helper';
+import { Queue } from 'bullmq';
+import { DOWNLOAD_TORRENT_QUEUE_NAME, REDIS_CONNECTION } from '../constants';
 
 const COMPLEMENT_TITLE_QUEUE_NAME = 'complement-title';
 
 export class ComplementTitle {
   private readonly mongoDB: MongoHelper;
   private readonly logger: pino.Logger;
+  private readonly queue: Queue;
 
   constructor() {
     this.mongoDB = new MongoHelper();
@@ -13,32 +16,32 @@ export class ComplementTitle {
       name: 'imdb-etl:complement-title',
       level: process.env.LOG_LEVEL || 'info',
     });
+    this.queue = new Queue(DOWNLOAD_TORRENT_QUEUE_NAME, {
+      connection: REDIS_CONNECTION,
+    });
   }
 
   async execute(title: any) {
     const collection = await this.mongoDB.getCollection('catalog', 'titles');
+    const logMetadata = { imdbId: title.imdbId };
     if (title.titleType === 'movie') {
       const ytsTitle = await this.getYTSTitle(title.imdbId);
       if (!ytsTitle) {
-        this.logger.debug(`⛔ Title ${title.imdbId} not found on YTS`);
+        this.logger.debug(logMetadata, `title ${title.imdbId} not found on YTS`);
         return;
       }
       const complementedTitle = {
         ...title,
         ...ytsTitle,
       };
-      await collection.updateOne(
-        { imdbId: complementedTitle.imdbId },
-        { $set: complementedTitle },
-      );
-      this.logger.info(`🍭 Title ${title.imdbId} complemented`);
+      await collection.updateOne({ imdbId: complementedTitle.imdbId }, { $set: complementedTitle });
+      await this.queue.add(DOWNLOAD_TORRENT_QUEUE_NAME, complementedTitle);
+      this.logger.info(logMetadata, `title ${title.imdbId} complemented`);
     }
   }
 
   private async getYTSTitle(imdbId: string) {
-    const res = await fetch(
-      `https://yts.mx/api/v2/movie_details.json?imdb_id=${imdbId}`,
-    );
+    const res = await fetch(`https://yts.mx/api/v2/movie_details.json?imdb_id=${imdbId}`);
     const json: { data?: { movie?: any } } = await res.json();
     if (json?.data?.movie?.title !== null) {
       return {
